@@ -16,8 +16,8 @@ private:
 	bool IsDictLoaded()const { return bDictLoaded; }
 	FString DictDir;
 	bool bDictLoaded = false;
-	ZSTD_CCtx* CDict;
-	ZSTD_DCtx* DDict;
+	ZSTD_CCtx* CDict = nullptr;
+	ZSTD_DCtx* DDict = nullptr;
 };
 
 
