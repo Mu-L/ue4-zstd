@@ -2,49 +2,13 @@
 
 #include "libzstd.h"
 
-#include "zstd.h"
+#include "FZstdShaderCompressionFormat.h"
+
 
 #define LOCTEXT_NAMESPACE "FlibzstdModule"
 #define DEFAULT_COMPRESSION_LEVEL 10
 
 int32 FZstdCompressionFormat::Level = DEFAULT_COMPRESSION_LEVEL;
-
-FName FZstdCompressionFormat::GetCompressionFormatName()
-{
-	return TEXT("zstd");
-}
-
-bool FZstdCompressionFormat::Compress(void* CompressedBuffer, int32& CompressedSize, const void* UncompressedBuffer, int32 UncompressedSize, int32 CompressionData)
-{
-	// UE_LOG(LogTemp, Log, TEXT("FZstdCompressionFormat::Compress level is %d"), FZstdCompressionFormat::Level);
-	int32 Result = ZSTD_compress(CompressedBuffer, CompressedSize, UncompressedBuffer, UncompressedSize, FZstdCompressionFormat::Level);
-	if (Result > 0)
-	{
-		if (Result > GetCompressedBufferSize(UncompressedSize, CompressionData))
-		{
-			FPlatformMisc::LowLevelOutputDebugStringf(TEXT("%d < %d"), Result, GetCompressedBufferSize(UncompressedSize, CompressionData));
-			// we cannot safely go over the BufferSize needed!
-			return false;
-		}
-		CompressedSize = Result;
-		return true;
-	}
-	return false;
-}
-bool FZstdCompressionFormat::Uncompress(void* UncompressedBuffer, int32& UncompressedSize, const void* CompressedBuffer, int32 CompressedSize, int32 CompressionData)
-{
-	int32 Result = ZSTD_decompress(UncompressedBuffer, UncompressedSize, CompressedBuffer, CompressedSize);
-	if (Result > 0)
-	{
-		UncompressedSize = Result;
-		return true;
-	}
-	return false;
-}
-int32 FZstdCompressionFormat::GetCompressedBufferSize(int32 UncompressedSize, int32 CompressionData)
-{
-	return ZSTD_compressBound(UncompressedSize);
-}
 
 #define ZSTD_LEVEL_OPTION_STRING TEXT("-ZstdLevel=")
 void FlibzstdModule::StartupModule()
@@ -58,16 +22,35 @@ void FlibzstdModule::StartupModule()
 	}
 
 	UE_LOG(LogTemp, Log, TEXT("FZstdCompressionFormat::Compress level is %d"), FZstdCompressionFormat::Level);
-	ZstdCompressionFormat = new FZstdCompressionFormat();
-	IModularFeatures::Get().RegisterModularFeature(COMPRESSION_FORMAT_FEATURE_NAME, ZstdCompressionFormat);
+	
+	auto ZstdCompressionFormat = new FZstdCompressionFormat();
+	ZstdCompressionFormats.Add(ZstdCompressionFormat->GetCompressionFormatName(),ZstdCompressionFormat);
+	
+	FString DictPath = FPaths::Combine(FPaths::ProjectContentDir(),TEXT("shader.dict"));
+	auto ZstdShaderCompressionFormat = new FZstdShaderCompressionFormat(DictPath);
+	ZstdCompressionFormats.Add(ZstdShaderCompressionFormat->GetCompressionFormatName(),ZstdShaderCompressionFormat);
 
+	for(auto Format:ZstdCompressionFormats)
+	{
+		if(Format.Value)
+		{
+			IModularFeatures::Get().RegisterModularFeature(COMPRESSION_FORMAT_FEATURE_NAME, Format.Value);
+		}
+	}
 }
 
 void FlibzstdModule::ShutdownModule()
 {
-	IModularFeatures::Get().UnregisterModularFeature(COMPRESSION_FORMAT_FEATURE_NAME, ZstdCompressionFormat);
-	delete ZstdCompressionFormat;
-
+	for(auto Format:ZstdCompressionFormats)
+	{
+		if(Format.Value)
+		{
+			IModularFeatures::Get().UnregisterModularFeature(COMPRESSION_FORMAT_FEATURE_NAME, Format.Value);
+			delete Format.Value;
+		}
+		
+		Format.Value = nullptr;
+	}
 }
 
 #undef LOCTEXT_NAMESPACE
