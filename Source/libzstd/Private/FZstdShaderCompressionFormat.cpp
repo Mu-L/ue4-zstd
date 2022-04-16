@@ -1,7 +1,11 @@
 #include "FZstdShaderCompressionFormat.h"
 
 #include "zstdmt_compress.h"
+#include "zstd_compress_internal.h"
+#include "zstd_decompress_internal.h"
+#include "zstd_ldm.h"
 #include "Misc/Paths.h"
+
 FZstdShaderCompressionFormat::FZstdShaderCompressionFormat(const FString& InDictDir):DictDir(InDictDir)
 {
 	if(FPaths::FileExists(InDictDir))
@@ -40,8 +44,8 @@ bool FZstdShaderCompressionFormat::Compress(void* CompressedBuffer, int32& Compr
 {
 	if(IsDictLoaded())
 	{
-		int32 Result = ZSTD_compressCCtx(CDict,CompressedBuffer, CompressedSize, UncompressedBuffer, UncompressedSize,
-												CompressionData);
+		int32 Result = ZSTD_compress_usingDict(CDict, CompressedBuffer, CompressedSize, UncompressedBuffer, UncompressedSize, CDict->localDict.dict, CDict->localDict.dictSize, 22);
+		
 		if (Result > 0)
 		{
 			if (Result > GetCompressedBufferSize(UncompressedSize, CompressionData))
@@ -67,6 +71,7 @@ bool FZstdShaderCompressionFormat::Uncompress(void* UncompressedBuffer, int32& U
 {
 	if(IsDictLoaded())
 	{
+		ZSTD_decompress_usingDict(DDict,UncompressedBuffer, UncompressedSize, CompressedBuffer, CompressedSize,DDict->ddict,ZSTD_sizeof_DDict(DDict->ddict));
 		int32 Result = ZSTD_decompressDCtx(DDict,UncompressedBuffer, UncompressedSize, CompressedBuffer, CompressedSize);
 		if (Result > 0)
 		{
