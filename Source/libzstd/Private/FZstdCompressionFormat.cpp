@@ -33,6 +33,7 @@ bool FZstdCompressionFormat::Uncompress(void* UncompressedBuffer, int32& Uncompr
 	}
 	return false;
 }
+
 int32 FZstdCompressionFormat::GetCompressedBufferSize(int32 UncompressedSize, int32 CompressionData)
 {
 	return ZSTD_compressBound(UncompressedSize);

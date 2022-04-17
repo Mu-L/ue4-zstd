@@ -14,6 +14,7 @@ FZstdShaderCompressionFormat::FZstdShaderCompressionFormat(const FString& InDict
 		bDictLoaded = FFileHelper::LoadFileToArray(DictData,*DictDir);
 		if(bDictLoaded)
 		{
+			UE_LOG(LogTemp,Display,TEXT("zstd compressor dict loaded!!"));
 			CDict = ZSTD_createCCtx();
 			ZSTD_CCtx_loadDictionary(CDict,(void*)DictData.GetData(),DictData.Num());
 			DDict = ZSTD_createDCtx();
@@ -42,11 +43,14 @@ FName FZstdShaderCompressionFormat::GetCompressionFormatName()
 bool FZstdShaderCompressionFormat::Compress(void* CompressedBuffer, int32& CompressedSize,
 	const void* UncompressedBuffer, int32 UncompressedSize, int32 CompressionData)
 {
+	SCOPED_NAMED_EVENT_TEXT("FZstdShaderCompressionFormat::Compress",FColor::Red);
 	if(IsDictLoaded())
 	{
+		// small size (1kb
 		int32 Result = ZSTD_compress_usingDict(CDict, CompressedBuffer, CompressedSize, UncompressedBuffer, UncompressedSize, CDict->localDict.dict, CDict->localDict.dictSize, 22);
-		
-		if (Result > 0)
+		// large size (2.4kb
+		// int32 Result = ZSTD_compressCCtx(CDict,CompressedBuffer, CompressedSize, UncompressedBuffer, UncompressedSize,22);
+		if (!ZSTD_isError(Result))
 		{
 			if (Result > GetCompressedBufferSize(UncompressedSize, CompressionData))
 			{
@@ -59,9 +63,7 @@ bool FZstdShaderCompressionFormat::Compress(void* CompressedBuffer, int32& Compr
 		}
 	}else
 	{
-		
-		return FZstdCompressionFormat::Compress(CompressedBuffer, CompressedSize, UncompressedBuffer, UncompressedSize,
-												CompressionData);
+		return FCompression::CompressMemory(NAME_LZ4,CompressedBuffer, CompressedSize, UncompressedBuffer, UncompressedSize);
 	}
 	return false;	
 }
@@ -69,18 +71,17 @@ bool FZstdShaderCompressionFormat::Compress(void* CompressedBuffer, int32& Compr
 bool FZstdShaderCompressionFormat::Uncompress(void* UncompressedBuffer, int32& UncompressedSize,
 	const void* CompressedBuffer, int32 CompressedSize, int32 CompressionData)
 {
+	SCOPED_NAMED_EVENT_TEXT("FZstdShaderCompressionFormat::Uncompress",FColor::Red);
 	if(IsDictLoaded())
 	{
-		ZSTD_decompress_usingDict(DDict,UncompressedBuffer, UncompressedSize, CompressedBuffer, CompressedSize,DDict->ddict,ZSTD_sizeof_DDict(DDict->ddict));
-		int32 Result = ZSTD_decompressDCtx(DDict,UncompressedBuffer, UncompressedSize, CompressedBuffer, CompressedSize);
-		if (Result > 0)
+		auto Result = ZSTD_decompressDCtx(DDict, UncompressedBuffer, UncompressedSize, CompressedBuffer, CompressedSize);
+		if (!ZSTD_isError(Result))
 		{
 			UncompressedSize = Result;
 			return true;
 		}
-		return true;	
+		return false;	
 	}else{
-		return FZstdCompressionFormat::Uncompress(UncompressedBuffer, UncompressedSize, CompressedBuffer, CompressedSize,
-												  CompressionData);
+		return FCompression::UncompressMemory(NAME_LZ4,UncompressedBuffer, UncompressedSize, CompressedBuffer, CompressedSize);
 	}
 }

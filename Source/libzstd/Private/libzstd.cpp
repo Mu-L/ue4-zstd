@@ -26,7 +26,7 @@ void FlibzstdModule::StartupModule()
 	auto ZstdCompressionFormat = new FZstdCompressionFormat();
 	ZstdCompressionFormats.Add(ZstdCompressionFormat->GetCompressionFormatName(),ZstdCompressionFormat);
 	
-	FString DictPath = FPaths::Combine(FPaths::ProjectContentDir(),TEXT("shader.dict"));
+	FString DictPath = FPaths::Combine(FPaths::ProjectContentDir(),TEXT("ZSTD"),TEXT("shader.dict"));
 	auto ZstdShaderCompressionFormat = new FZstdShaderCompressionFormat(DictPath);
 	ZstdCompressionFormats.Add(ZstdShaderCompressionFormat->GetCompressionFormatName(),ZstdShaderCompressionFormat);
 
