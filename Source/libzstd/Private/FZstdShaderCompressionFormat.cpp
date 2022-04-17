@@ -6,6 +6,10 @@
 #include "zstd_ldm.h"
 #include "Misc/Paths.h"
 
+static FName DefaultShaderCompressionName = NAME_LZ4;
+
+DEFINE_LOG_CATEGORY_STATIC(LogZstdShader,All,All);
+
 FZstdShaderCompressionFormat::FZstdShaderCompressionFormat(const FString& InDictDir):DictDir(InDictDir)
 {
 	if(FPaths::FileExists(InDictDir))
@@ -14,7 +18,7 @@ FZstdShaderCompressionFormat::FZstdShaderCompressionFormat(const FString& InDict
 		bDictLoaded = FFileHelper::LoadFileToArray(DictData,*DictDir);
 		if(bDictLoaded)
 		{
-			UE_LOG(LogTemp,Display,TEXT("zstd compressor dict loaded!!"));
+			UE_LOG(LogZstdShader,Display,TEXT("zstd compressor dict loaded!!"));
 			CDict = ZSTD_createCCtx();
 			ZSTD_CCtx_loadDictionary(CDict,(void*)DictData.GetData(),DictData.Num());
 			DDict = ZSTD_createDCtx();
@@ -44,6 +48,7 @@ bool FZstdShaderCompressionFormat::Compress(void* CompressedBuffer, int32& Compr
 	const void* UncompressedBuffer, int32 UncompressedSize, int32 CompressionData)
 {
 	SCOPED_NAMED_EVENT_TEXT("FZstdShaderCompressionFormat::Compress",FColor::Red);
+	bool bZstdCompressed = false;
 	if(IsDictLoaded())
 	{
 		// small size (1kb
@@ -56,32 +61,38 @@ bool FZstdShaderCompressionFormat::Compress(void* CompressedBuffer, int32& Compr
 			{
 				FPlatformMisc::LowLevelOutputDebugStringf(TEXT("%d < %d"), Result, GetCompressedBufferSize(UncompressedSize, CompressionData));
 				// we cannot safely go over the BufferSize needed!
-				return false;
 			}
 			CompressedSize = Result;
-			return true;
+			bZstdCompressed = true;
 		}
-	}else
-	{
-		return FCompression::CompressMemory(NAME_LZ4,CompressedBuffer, CompressedSize, UncompressedBuffer, UncompressedSize);
 	}
-	return false;	
+
+	if(!bZstdCompressed)
+	{
+		UE_LOG(LogZstdShader,Display,TEXT("zstd compress failed,try using %s !"),*DefaultShaderCompressionName.ToString());
+		return FCompression::CompressMemory(DefaultShaderCompressionName,CompressedBuffer, CompressedSize, UncompressedBuffer, UncompressedSize);
+	}
+	return bZstdCompressed;	
 }
 
 bool FZstdShaderCompressionFormat::Uncompress(void* UncompressedBuffer, int32& UncompressedSize,
 	const void* CompressedBuffer, int32 CompressedSize, int32 CompressionData)
 {
 	SCOPED_NAMED_EVENT_TEXT("FZstdShaderCompressionFormat::Uncompress",FColor::Red);
+	bool bZstdCompressed = false;
 	if(IsDictLoaded())
 	{
 		auto Result = ZSTD_decompressDCtx(DDict, UncompressedBuffer, UncompressedSize, CompressedBuffer, CompressedSize);
 		if (!ZSTD_isError(Result))
 		{
 			UncompressedSize = Result;
-			return true;
+			bZstdCompressed = true;
 		}
-		return false;	
-	}else{
-		return FCompression::UncompressMemory(NAME_LZ4,UncompressedBuffer, UncompressedSize, CompressedBuffer, CompressedSize);
 	}
+	if(!bZstdCompressed)
+	{
+		UE_LOG(LogZstdShader,Display,TEXT("zstd uncompress failed,try using %s !"),*DefaultShaderCompressionName.ToString());
+		return FCompression::UncompressMemory(DefaultShaderCompressionName,UncompressedBuffer, UncompressedSize, CompressedBuffer, CompressedSize);
+	}
+	return bZstdCompressed;
 }
